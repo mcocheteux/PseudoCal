@@ -1,0 +1,79 @@
+# PseudoPillars — coarse, initialisation-free first stage of PseudoCal.
+
+_target_: pseudocal.models.pseudopillars.PseudoPillars
+
+lr:            3.0e-5   # conservative; cosine annealing handles the decay
+weight_decay:  1.0e-4
+warmup_epochs: 5        # linear LR ramp-up stabilises the from-scratch backbone
+
+# Monocular depth estimator (selected by the top-level `depth` group; override with
+# e.g. depth=glpn or depth=dummy). Interpolated here so it is instantiated inside
+# the model and its (frozen) weights live on the model's device.
+depth: ${depth}
+
+# Pseudo-LiDAR back-projection. Stride/point-count trade a little density for a
+# faster pillar encoder; the cloud is dense enough for the coarse stage.
+backproject_stride: 3      # sub-sample the dense depth map by this factor
+min_depth:          1.0    # metres
+max_depth:          80.0   # metres
+max_pseudo_points:  15000  # padded length of the pseudo-LiDAR cloud
+pillar_channels:    32     # channels per BEV pillar pseudo-image (per modality)
+
+# BEV pillar grid in the camera frame (x = right, z = forward); height axis = y.
+# Covers the full 360° around the sensor (z spans negative too): under large-yaw
+# decalibration the real LiDAR rotates behind the camera, so a forward-only grid
+# (z>=0) would drop those points and leave the network no signal. A symmetric grid
+# keeps the rotated cloud in view for the whole ±180° range.
+grid:
+  _target_: pseudocal.pillars.PillarGrid
+  x_min: -50.0
+  x_max:  50.0
+  z_min: -50.0
+  z_max:  50.0
+  pillar_size: 0.4         # → 250 × 250 pillar grid
+
+# MobileViT fusion backbone. Input is the two pillar pseudo-images concatenated, so
+# img_channels == lidar_channels == pillar_channels (total 2 × pillar_channels). Not
+# an RGB image, so train from scratch (pretrained: null).
+backbone:
+  # Spatial-preserving backbone: pools to a 4×4 grid (not 1×1) so the head can do
+  # BEV registration — global pooling discards the spatial signal a calibrator needs.
+  _target_: pseudocal.models.spatial_backbone.SpatialMobileViTBackbone
+  spatial_pool:        4    # retained feature grid side k  → flatten width D*k*k
+  img_channels:        32   # = pillar_channels (pseudo-LiDAR pillar image)
+  lidar_channels:      32   # = pillar_channels (real-LiDAR pillar image)
+  image_size:          256
+  hidden_sizes:        [144, 192, 240]
+  num_attention_heads: 4
+  patch_size:          2
+  conv_kernel_size:    3
+  pretrained:          null
+  spatial_head:        true
+
+head:
+  _target_: unical.models.head.SplitRegressionHead
+  in_features:   10240      # 640 (neck_hidden_sizes[-1]) × 4 × 4 spatial grid
+  common_hidden: [1024]     # squeeze the larger spatial feature before the branches
+  trans_hidden:  [640, 256]
+  rot_hidden:    [640, 256]
+  rot_dim:       6          # 6-D continuous rotation (Zhou et al., CVPR 2019)
+
+# Reused UniCal losses: direct regression + differentiable spatial (point-cloud) loss.
+# The spatial point-cloud MSE is in metres² and is naturally ~100× larger than the
+# regression terms, which would swamp the direct supervision of the decalibration and
+# leave the regression head undertrained (it collapses to predicting ~zero). We make
+# the clean regression signal dominant and keep the spatial terms as a small geometric
+# refinement (down-weighted to a comparable magnitude).
+loss:
+  _target_: unical.losses.combined.CombinedLoss
+  regression:
+    # Euler-angle loss (wrap-around safe): keeps a non-vanishing gradient through 180°,
+    # unlike Frobenius matrix-MSE (∝ sin θ → 0), so the coarse stage can escape ~180°
+    # yaw flips. Matches the original PseudoCal paper. rot error is in radians².
+    _target_: pseudocal.losses.euler.EulerRegressionLoss
+    trans_weight: 5.0
+    rot_weight:   1.0
+  spatial:
+    _target_: unical.losses.spatial.SpatialLoss
+    centroid_weight: 0.05
+    pcl_weight:      0.01

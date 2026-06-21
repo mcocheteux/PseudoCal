@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Experiment artifacts
+logs/
+outputs/
+wandb/
+*.ckpt
+multirun/
+
+# Datasets (KITTI raw is large — never commit). Anchored to the repo root so the
+# pattern does NOT match nested source dirs like configs/data/ or src/pseudocal/data/.
+/data/
+/kitti_raw/
+*.bin
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,35 @@
+# PseudoPillars data: raw RGB image + raw LiDAR scan + Canny keep-mask.
+#
+# Decalibration is large and asymmetric (full ±180° yaw, ±30° roll/pitch, ±150 cm),
+# the initialisation-free regime PseudoPillars is designed for.
+
+_target_: pseudocal.data.datamodule.PseudoKittiDataModule
+
+data_dir: ${data_dir}
+
+batch_size:  8
+num_workers: 4
+pin_memory:  false
+
+# Working resolution (also the monocular-depth resolution).
+width:  512
+height: 512
+
+# Canny edge filtering of the depth map before back-projection (drops "flying pixel"
+# streaks at depth discontinuities).
+edge_low:    50
+edge_high:   150
+edge_dilate: 2
+
+# Pre-computed pseudo-LiDAR cache. When set (and populated by
+# precompute_pseudolidar.py), training loads cached points and skips the frozen
+# monocular-depth forward — the single biggest speedup. null = compute depth live.
+pseudolidar_cache_dir: null
+
+splits: ${experiment.splits}
+
+# Per-axis decalibration: yaw spans the full ±180°, the headline init-free property.
+decalibrator:
+  _target_: unical.data.decalibrator.ErrorGenerator6D
+  r_range: [15.0, 15.0, 180.0]   # roll, pitch, yaw — degrees (matched to the original paper)
+  t_range: [100.0, 100.0, 100.0]  # x, y, z — centimetres

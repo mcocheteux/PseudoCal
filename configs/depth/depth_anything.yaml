@@ -1,0 +1,9 @@
+# Default depth estimator: Depth Anything V2, metric, outdoor (KITTI-suited).
+#
+# Metric scale is important — the back-projected pseudo-LiDAR must share the real
+# LiDAR's absolute scale for the bird's-eye-view pillars to align. Use the Base
+# checkpoint (…-Base-hf) on smaller GPUs.
+_target_: pseudocal.depth.depth_anything.DepthAnythingV2MetricEstimator
+model_id:   depth-anything/Depth-Anything-V2-Metric-Outdoor-Large-hf
+infer_size: 518     # multiple of 14 (DINOv2 patch size)
+max_depth:  80.0    # metres

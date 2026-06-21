@@ -1,0 +1,4 @@
+# Local CSV logger (no external dependencies). Default.
+_target_: pytorch_lightning.loggers.CSVLogger
+save_dir: ${log_dir}
+name:     pseudocal

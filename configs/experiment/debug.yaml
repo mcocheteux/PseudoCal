@@ -1,0 +1,9 @@
+# Tiny split for fast iteration / smoke tests (one drive, reused for val + test).
+
+splits:
+  train:
+    - ["2011_09_26", [1]]
+  val:
+    - ["2011_09_26", [1]]
+  test:
+    - ["2011_09_26", [1]]

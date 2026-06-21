@@ -1,0 +1,60 @@
+# End-to-end cascade evaluation config (used by cascade.py).
+#
+# Loads all three trained stages and runs them in sequence on the test split,
+# starting from a large (initialisation-free regime) decalibration.
+#
+#   python cascade.py data_dir=/path/to/kitti_raw \
+#       +ckpt.pseudopillars=logs/checkpoints/pseudopillars/last.ckpt \
+#       +ckpt.unical_m=logs/checkpoints/unical_m/last.ckpt \
+#       +ckpt.unical_s=logs/checkpoints/unical_s/last.ckpt
+
+defaults:
+  - depth: depth_anything
+  - model@pseudopillars: pseudopillars
+  - model@unical_m: unical_m
+  - model@unical_s: unical_s
+  - experiment: default
+  - _self_
+
+data_dir: ???
+seed:     42
+limit:    null          # cap the number of test frames (null = all)
+accelerator: auto       # cpu / cuda / auto
+
+# Checkpoints (override on the CLI). A null path runs that stage with random/init
+# weights — useful only for smoke-testing the wiring.
+ckpt:
+  pseudopillars: null
+  unical_m:      null
+  unical_s:      null
+
+# Test dataset providing raw frames + the (deterministic) large decalibration to fix.
+dataset:
+  _target_: pseudocal.data.dataset.PseudoKittiDataset
+  data_dir: ${data_dir}
+  split:    ${experiment.splits.test}
+  width:    512
+  height:   512
+  edge_low:    50
+  edge_high:   150
+  edge_dilate: 2
+  deterministic: true
+  seed:     ${seed}
+  decalibrator:
+    _target_: unical.data.decalibrator.ErrorGenerator6D
+    r_range: [15.0, 15.0, 180.0]   # matched to the coarse stage's training range
+    t_range: [100.0, 100.0, 100.0]
+
+# UniCal preprocessor used to render the refine stages' image + sparse-depth inputs.
+preprocessor:
+  _target_: unical.data.preprocessor.DataPreprocessor
+  cfg:
+    _target_: unical.data.preprocessor.PreprocessorConfig
+    width:         512
+    height:        512
+    grayscale:     false
+    add_intensity: false
+    min_depth:     2.0
+    max_depth:     80.0
+    augmentation:
+      _target_: unical.utils.augmentation.AugmentationConfig

@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software or the PseudoCal method, please cite the paper below."
+title: "PseudoCal: Towards Initialisation-Free Deep Learning-Based Camera-LiDAR Self-Calibration"
+authors:
+  - family-names: Cocheteux
+    given-names: Mathieu
+  - family-names: Moreau
+    given-names: Julien
+  - family-names: Davoine
+    given-names: Franck
+license: CC-BY-NC-4.0
+repository-code: "https://github.com/mcocheteux/pseudocal"
+preferred-citation:
+  type: conference-paper
+  title: "PseudoCal: Towards Initialisation-Free Deep Learning-Based Camera-LiDAR Self-Calibration"
+  authors:
+    - family-names: Cocheteux
+      given-names: Mathieu
+    - family-names: Moreau
+      given-names: Julien
+    - family-names: Davoine
+      given-names: Franck
+  collection-title: "34th British Machine Vision Conference 2023, BMVC 2023, Aberdeen, UK, November 20-24, 2023"
+  publisher:
+    name: BMVA
+  year: 2023
+  url: "https://papers.bmvc2023.org/0829.pdf"

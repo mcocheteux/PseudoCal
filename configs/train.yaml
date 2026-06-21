@@ -1,0 +1,32 @@
+# Main training configuration (trains ONE PseudoCal stage).
+#
+# Examples:
+#   python train.py data_dir=/path/to/kitti_raw                       # PseudoPillars
+#   python train.py data_dir=/path/to/kitti_raw model=unical_m data=kitti
+#   python train.py data_dir=/path/to/kitti_raw model=unical_s data=kitti
+#   python train.py data_dir=/path/to/kitti_raw logger=wandb depth=depth_anything
+
+defaults:
+  - data: kitti_pillars
+  - model: pseudopillars
+  - depth: depth_anything   # depth estimator for PseudoPillars; override e.g. depth=dummy
+  - experiment: default
+  - logger: csv             # override with `logger=wandb` to track on Weights & Biases
+  - _self_
+
+# ── Paths ────────────────────────────────────────────────────────────────────
+data_dir:  ???              # set via CLI: data_dir=/path/to/kitti_raw
+log_dir:   logs/
+stage:     ${hydra:runtime.choices.model}   # checkpoint sub-folder = selected model group
+
+# ── Trainer ─────────────────────────────────────────────────────────────────
+trainer:
+  max_epochs:      300          # PseudoPillars converges by ~250 epochs; refiners faster
+  accelerator:     auto         # CUDA on Linux GPU, MPS on Apple Silicon, else CPU
+  devices:         1
+  precision:       "32-true"    # switch to "bf16-mixed" on Ampere+ for ~40% speedup
+  log_every_n_steps: 20
+  val_check_interval: 1.0       # validate once per epoch
+  gradient_clip_val: 1.0        # spatial loss can spike early; clip the gradient norm
+
+seed: 42

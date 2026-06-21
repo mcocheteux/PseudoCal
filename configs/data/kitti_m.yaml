@@ -1,0 +1,31 @@
+# UniCal-M data: image + projected sparse-depth map (UniCal++ pipeline).
+# Cascade-aware range: matched to the coarse stage's actual residual distribution,
+# narrower than the original ±10°/±100 cm so M specialises on what it really sees.
+
+_target_: unical.data.datamodule.KittiDataModule
+
+data_dir: ${data_dir}
+
+batch_size:  8
+num_workers: 4
+pin_memory:  false
+
+splits: ${experiment.splits}
+
+decalibrator:
+  _target_: unical.data.decalibrator.ErrorGenerator
+  r_range: 6.0     # degrees, per axis (covers the coarse stage's residual + tail)
+  t_range: 60.0    # centimetres, per axis (covers the coarse stage's residual + tail)
+
+preprocessor:
+  _target_: unical.data.preprocessor.DataPreprocessor
+  cfg:
+    _target_: unical.data.preprocessor.PreprocessorConfig
+    width:         512
+    height:        512
+    grayscale:     false
+    add_intensity: false
+    min_depth:     2.0
+    max_depth:     80.0
+    augmentation:
+      _target_: unical.utils.augmentation.AugmentationConfig

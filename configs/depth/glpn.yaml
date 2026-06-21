@@ -1,0 +1,5 @@
+# Paper-faithful depth estimator: GLPN (the estimator used in arXiv:2309.09855).
+_target_: pseudocal.depth.glpn.GLPNDepthEstimator
+model_id:   vinvino02/glpn-kitti
+infer_size: 480
+max_depth:  80.0    # metres

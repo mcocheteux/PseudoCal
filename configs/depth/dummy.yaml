@@ -1,0 +1,5 @@
+# Synthetic depth estimator for tests / CPU smoke runs (no weight download).
+_target_: pseudocal.depth.dummy.DummyDepthEstimator
+near:      5.0
+far:       50.0
+max_depth: 80.0

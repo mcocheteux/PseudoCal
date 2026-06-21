@@ -1,0 +1,31 @@
+# UniCal-S data: image + projected sparse-depth map (UniCal++ pipeline).
+# Final fine-refinement stage: trained on the tight residual range it is designed
+# for, since by this point in the cascade the extrinsic is already close to correct.
+
+_target_: unical.data.datamodule.KittiDataModule
+
+data_dir: ${data_dir}
+
+batch_size:  8
+num_workers: 4
+pin_memory:  false
+
+splits: ${experiment.splits}
+
+decalibrator:
+  _target_: unical.data.decalibrator.ErrorGenerator
+  r_range: 1.0     # degrees, per axis
+  t_range: 10.0    # centimetres, per axis
+
+preprocessor:
+  _target_: unical.data.preprocessor.DataPreprocessor
+  cfg:
+    _target_: unical.data.preprocessor.PreprocessorConfig
+    width:         512
+    height:        512
+    grayscale:     false
+    add_intensity: false
+    min_depth:     2.0
+    max_depth:     80.0
+    augmentation:
+      _target_: unical.utils.augmentation.AugmentationConfig

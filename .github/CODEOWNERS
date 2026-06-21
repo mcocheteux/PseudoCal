@@ -1,0 +1,7 @@
+# Code ownership for PseudoCal.
+#
+# Every change to any file requires review and approval from @mcocheteux.
+# Combined with a branch-protection rule on `main` that requires a pull request
+# and a Code Owner review, this ensures nothing is merged without sign-off.
+
+* @mcocheteux
