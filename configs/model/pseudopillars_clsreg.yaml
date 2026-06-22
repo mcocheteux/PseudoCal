@@ -1,0 +1,59 @@
+# PseudoPillars with the classify-then-regress yaw head (research variant).
+#
+# Same coarse stage as `pseudopillars`, but yaw (the ±180° Euler-XYZ component) is
+# predicted as a classification over n_yaw_bins plus an in-bin residual, to collapse the
+# 180°-flip tail. Pair with `data=kitti_pillars`.
+
+_target_: pseudocal.models.pseudopillars_clsreg.PseudoPillarsClsReg
+
+lr:            3.0e-5
+weight_decay:  1.0e-4
+warmup_epochs: 5
+
+depth: ${depth}
+
+backproject_stride: 3
+min_depth:          1.0
+max_depth:          80.0
+max_pseudo_points:  15000
+pillar_channels:    32
+
+grid:
+  _target_: pseudocal.pillars.PillarGrid
+  x_min: -50.0
+  x_max:  50.0
+  z_min: -50.0
+  z_max:  50.0
+  pillar_size: 0.4
+
+backbone:
+  _target_: pseudocal.models.spatial_backbone.SpatialMobileViTBackbone
+  spatial_pool:        4
+  img_channels:        32
+  lidar_channels:      32
+  image_size:          256
+  hidden_sizes:        [144, 192, 240]
+  num_attention_heads: 4
+  patch_size:          2
+  conv_kernel_size:    3
+  pretrained:          null
+  spatial_head:        true
+
+# Classify-then-regress head: translation + roll/pitch regressed, yaw classified + refined.
+head:
+  _target_: pseudocal.models.yaw_head.ClassifyRegressYawHead
+  in_features:   10240
+  common_hidden: [1024]
+  trans_hidden:  [640, 256]
+  rot_hidden:    [640, 256]
+  n_yaw_bins:    12        # 30° bins over ±180°
+  yaw_axis:      2         # the Euler-XYZ component that spans ±180°
+
+# Dedicated loss (no CombinedLoss): yaw cross-entropy + in-bin residual + roll/pitch + trans.
+loss:
+  _target_: pseudocal.losses.yaw_cls.YawClsRegLoss
+  yaw_axis:         2
+  cls_weight:       1.0
+  res_weight:       1.0
+  rollpitch_weight: 1.0
+  trans_weight:     5.0

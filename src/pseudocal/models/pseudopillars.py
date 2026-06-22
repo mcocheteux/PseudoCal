@@ -137,8 +137,8 @@ class PseudoPillars(L.LightningModule):
     # Forward
     # ------------------------------------------------------------------
 
-    def forward(self, batch: PseudoBatch) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return (trans_pred (B,3), rot6d_pred (B,6))."""
+    def _features(self, batch: PseudoBatch) -> torch.Tensor:
+        """Fuse the pseudo-LiDAR and real-LiDAR BEV pillar images into a feature vector."""
         # Build both clouds in full precision (geometry is fp32-sensitive); the
         # learnable pillar/backbone path below still benefits from AMP.
         with torch.autocast(device_type=self.device.type, enabled=False):
@@ -147,8 +147,11 @@ class PseudoPillars(L.LightningModule):
 
         img_pseudo = self.pillars_pseudo(pseudo)  # (B, C, H, W)
         img_real = self.pillars_real(real)  # (B, C, H, W)
-        features = self.backbone(SimpleNamespace(img=img_pseudo, lidar_map=img_real))
-        return self.head(features)
+        return self.backbone(SimpleNamespace(img=img_pseudo, lidar_map=img_real))
+
+    def forward(self, batch: PseudoBatch) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return (trans_pred (B,3), rot6d_pred (B,6))."""
+        return self.head(self._features(batch))
 
     # ------------------------------------------------------------------
     # Shared step (identical bookkeeping to UniCal)
