@@ -29,6 +29,7 @@ from typing import Any
 
 import pytorch_lightning as L
 import torch
+import torch.nn as nn
 from unical.losses.combined import CombinedLoss
 from unical.models.backbone import MobileViTBackbone
 from unical.models.head import SplitRegressionHead
@@ -39,6 +40,7 @@ from pseudocal.data.dataset import PseudoBatch
 from pseudocal.depth.base import DepthEstimator
 from pseudocal.pillars import PillarFeatureNet, PillarGrid
 from pseudocal.pseudolidar import backproject
+from pseudocal.scale import estimate_range_scale, point_range_quantiles
 
 
 class PseudoPillars(L.LightningModule):
@@ -56,6 +58,12 @@ class PseudoPillars(L.LightningModule):
         backproject_stride: Pixel sub-sampling stride for pseudo-LiDAR.
         min_depth/max_depth: Depth range (m) kept when back-projecting.
         max_pseudo_points:  Padded length of the pseudo-LiDAR cloud.
+        scale_align:        Depth-scale correction: ``none`` | ``range`` (rotation-invariant
+                            range matching to the real LiDAR) | ``range+residual`` (+ a small
+                            learned correction).
+        scale_bias:         Fixed multiplicative scale error injected on the pseudo-LiDAR
+                            (1.0 = none; used for the eval sensitivity sweep).
+        scale_jitter:       Train-time per-sample random scale augmentation (±fraction).
         lr / weight_decay / warmup_epochs: optimiser schedule (as UniCal).
     """
 
@@ -71,6 +79,9 @@ class PseudoPillars(L.LightningModule):
         min_depth: float = 1.0,
         max_depth: float = 80.0,
         max_pseudo_points: int = 30000,
+        scale_align: str = "none",
+        scale_jitter: float = 0.0,
+        scale_bias: float = 1.0,
         lr: float = 3e-5,
         weight_decay: float = 1e-4,
         warmup_epochs: int = 5,
@@ -86,6 +97,17 @@ class PseudoPillars(L.LightningModule):
         self.loss_fn = loss
 
         self.grid = grid
+
+        # Depth-scale alignment (#2). `scale_bias`/`scale_jitter` *inject* a metric-depth
+        # scale error on the pseudo-LiDAR (eval sweep / train augmentation); `scale_align`
+        # *corrects* it by anchoring to the real LiDAR's range distribution.
+        if scale_align not in ("none", "range", "range+residual"):
+            raise ValueError(f"scale_align must be none|range|range+residual, got {scale_align!r}")
+        self._scale_quantiles = (0.5, 0.7, 0.9)
+        self.scale_residual: nn.Module | None = None
+        if scale_align == "range+residual":
+            q = len(self._scale_quantiles)
+            self.scale_residual = nn.Sequential(nn.Linear(2 * q, 16), nn.ReLU(), nn.Linear(16, 1))
 
         self._val_metrics = CalibMetrics()
         self._test_metrics = CalibMetrics()
@@ -106,18 +128,50 @@ class PseudoPillars(L.LightningModule):
             pts = batch.pseudo_pcl.float()  # (B, P, 3), zero-padded
             valid = pts.abs().sum(-1) > 0
             pts = pts * valid.unsqueeze(-1)
-            return torch.cat([pts, valid.float().unsqueeze(-1)], dim=-1)  # (B, P, 4)
+            cloud = torch.cat([pts, valid.float().unsqueeze(-1)], dim=-1)  # (B, P, 4)
+        else:
+            depth = self.depth.estimate(batch.image).float()  # (B, 1, H, W)
+            cloud = backproject(
+                depth,
+                batch.K.float(),
+                batch.edge_mask,
+                stride=self.hparams.backproject_stride,
+                min_depth=self.hparams.min_depth,
+                max_depth=self.hparams.max_depth,
+                max_points=self.hparams.max_pseudo_points,
+            )
+        return self._perturb_scale(cloud)
 
-        depth = self.depth.estimate(batch.image).float()  # (B, 1, H, W)
-        return backproject(
-            depth,
-            batch.K.float(),
-            batch.edge_mask,
-            stride=self.hparams.backproject_stride,
-            min_depth=self.hparams.min_depth,
-            max_depth=self.hparams.max_depth,
-            max_points=self.hparams.max_pseudo_points,
-        )
+    def _perturb_scale(self, cloud: torch.Tensor) -> torch.Tensor:
+        """
+        Inject a metric-depth scale error on the pseudo-LiDAR: a fixed ``scale_bias`` (eval
+        sensitivity sweep) and, during training, an extra per-sample random ``scale_jitter``.
+        Both default to a no-op. This *simulates* depth-scale drift; ``_align_scale`` corrects it.
+        """
+        bias = float(self.hparams.scale_bias)
+        jitter = float(self.hparams.scale_jitter)
+        if bias == 1.0 and not (self.training and jitter > 0.0):
+            return cloud
+        b = cloud.shape[0]
+        factor = torch.full((b, 1, 1), bias, device=cloud.device, dtype=cloud.dtype)
+        if self.training and jitter > 0.0:
+            factor = factor * (1.0 + (torch.rand(b, 1, 1, device=cloud.device) * 2 - 1) * jitter)
+        return torch.cat([cloud[..., :3] * factor, cloud[..., 3:]], dim=-1)
+
+    def _align_scale(self, pseudo: torch.Tensor, real: torch.Tensor) -> torch.Tensor:
+        """
+        Rescale the pseudo-LiDAR so its range distribution matches the real LiDAR's
+        (rotation-invariant; see :mod:`pseudocal.scale`). The closed-form factor is detached
+        for stability; ``range+residual`` adds a small learned multiplicative correction.
+        """
+        q = self._scale_quantiles
+        s = estimate_range_scale(pseudo, real, quantiles=q).detach()  # (B,)
+        if self.scale_residual is not None:
+            qp = point_range_quantiles(pseudo, q).clamp_min(1e-6).log()
+            qr = point_range_quantiles(real, q).clamp_min(1e-6).log()
+            feat = torch.nan_to_num(torch.cat([qp, qr], dim=-1))  # (B, 2Q)
+            s = s * torch.exp(self.scale_residual(feat).squeeze(-1))
+        return torch.cat([pseudo[..., :3] * s[:, None, None], pseudo[..., 3:]], dim=-1)
 
     @staticmethod
     def _real_cloud(batch: PseudoBatch) -> torch.Tensor:
@@ -144,6 +198,8 @@ class PseudoPillars(L.LightningModule):
         with torch.autocast(device_type=self.device.type, enabled=False):
             pseudo = self._pseudo_cloud(batch)
             real = self._real_cloud(batch)
+            if self.hparams.scale_align != "none":
+                pseudo = self._align_scale(pseudo, real)
 
         img_pseudo = self.pillars_pseudo(pseudo)  # (B, C, H, W)
         img_real = self.pillars_real(real)  # (B, C, H, W)
