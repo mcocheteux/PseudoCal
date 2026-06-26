@@ -5,6 +5,8 @@
 #   bash deploy/vast/download_kitti.sh [DEST_DIR]
 #   PARALLEL=8 bash deploy/vast/download_kitti.sh /workspace/kitti_raw
 #
+# Tip: On vast.ai instances with good bandwidth, use PARALLEL=12 or higher for faster downloads
+#
 # Pulls the sync archives for the train/val drives (2011_09_26) and the test drive
 # (2011_09_30/0028), plus the per-date calibration archives, and unzips them into the
 # KITTI raw layout the dataset loader expects:

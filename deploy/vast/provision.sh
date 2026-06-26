@@ -39,6 +39,7 @@ print("[provision] depth weights cached.")
 PY
 
 echo "[provision] done. Next:"
-echo "  bash deploy/vast/download_kitti.sh           # fetch KITTI raw"
+echo "  bash deploy/vast/download_kitti.sh              # fetch KITTI raw (~50GB)"
+echo "  PARALLEL=12 bash deploy/vast/download_kitti.sh # faster on good connections"
 echo "  export WANDB_API_KEY=...                      # enable W&B tracking"
 echo "  bash deploy/vast/train_vast.sh pseudopillars  # train stage 1"
