@@ -111,6 +111,10 @@ class PseudoPillars(L.LightningModule):
 
         self._val_metrics = CalibMetrics()
         self._test_metrics = CalibMetrics()
+        # Tail diagnostics (#3): CalibMetrics only gives mean/STD, which hides the
+        # 180°-flip behaviour the classify-then-regress head specifically targets.
+        self._test_pred_R: list[torch.Tensor] = []
+        self._test_target_R: list[torch.Tensor] = []
 
     # ------------------------------------------------------------------
     # Geometry helpers (run in float32, outside AMP autocast)
@@ -275,11 +279,29 @@ class PseudoPillars(L.LightningModule):
         )
         for p, t in zip(pred_Ts, target_Ts):
             self._test_metrics.add(p, t)
+            self._test_pred_R.append(torch.from_numpy(p.rotation_matrix))
+            self._test_target_R.append(torch.from_numpy(t.rotation_matrix))
 
     def on_test_epoch_end(self) -> None:
+        # Local import: pseudocal.metrics -> losses.euler -> losses (package) -> yaw_cls ->
+        # models.yaw_head -> models (package) -> this module, so a module-level import cycles.
+        from pseudocal.metrics import flip_rate, rotation_tail_percentiles, yaw_error_deg
+
         metrics = self._test_metrics.all_metrics()
         self.log_dict({f"test/{k}": v for k, v in metrics.items()}, sync_dist=True)
         self._test_metrics.clear()
+
+        if self._test_pred_R:
+            pred_R = torch.stack(self._test_pred_R)
+            target_R = torch.stack(self._test_target_R)
+            yaw_err = yaw_error_deg(pred_R, target_R)
+            tail_metrics = {
+                "test/flip_rate": flip_rate(pred_R, target_R),
+                **{f"test/rot/yaw/{k}": v for k, v in rotation_tail_percentiles(yaw_err).items()},
+            }
+            self.log_dict(tail_metrics, sync_dist=True)
+        self._test_pred_R.clear()
+        self._test_target_R.clear()
 
     # ------------------------------------------------------------------
     # Checkpoint I/O — exclude the frozen depth estimator
