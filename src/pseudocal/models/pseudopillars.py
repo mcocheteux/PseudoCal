@@ -60,7 +60,7 @@ class PseudoPillars(L.LightningModule):
         max_pseudo_points:  Padded length of the pseudo-LiDAR cloud.
         scale_align:        Depth-scale correction: ``none`` | ``range`` (rotation-invariant
                             range matching to the real LiDAR) | ``range+residual`` (+ a small
-                            learned correction).
+                            learned correction). Default ``range+residual``.
         scale_bias:         Fixed multiplicative scale error injected on the pseudo-LiDAR
                             (1.0 = none; used for the eval sensitivity sweep).
         scale_jitter:       Train-time per-sample random scale augmentation (±fraction).
@@ -79,7 +79,7 @@ class PseudoPillars(L.LightningModule):
         min_depth: float = 1.0,
         max_depth: float = 80.0,
         max_pseudo_points: int = 30000,
-        scale_align: str = "none",
+        scale_align: str = "range+residual",
         scale_jitter: float = 0.0,
         scale_bias: float = 1.0,
         lr: float = 3e-5,
