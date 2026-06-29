@@ -10,7 +10,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-ee4c2c.svg)](https://pytorch.org/)
 [![Lightning](https://img.shields.io/badge/Lightning-2.2+-792ee5.svg)](https://lightning.ai/)
-[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 *A reference implementation by one of the paper's authors — see [Citation](#citation).*
 
@@ -239,5 +239,5 @@ Builds on [UniCal++](https://github.com/mcocheteux/unical-plus). Depth backbone:
 [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2). BEV encoder inspired by
 [PointPillars](https://arxiv.org/abs/1812.05784).
 
-Released under **CC BY-NC 4.0** (research / non-commercial use). See [LICENSE](LICENSE).
+Released under **Apache License 2.0**. See [LICENSE](LICENSE).
 </content>

@@ -40,4 +40,4 @@ The same three checks run in [CI](.github/workflows/ci.yml); run them locally fi
 
 ## License
 
-By contributing you agree your contributions are licensed under **CC BY-NC 4.0**.
+By contributing you agree your contributions are licensed under **Apache License 2.0**.
